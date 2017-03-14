@@ -1,0 +1,278 @@
+# Mind map
+## Model
+### Mind map
+```
+commit
+  [#node #root title: "-1 + (2 * 3)" children:
+    [#child sort: 0 label: "augend" node:
+      [#node title: "-1" children:
+        [#child sort: 0 label: "negated" node:
+          [#node title: "1"]
+        ]
+      ]
+    ]
+    [#child sort: 1 label: "addend" node:
+      [#node title: "2 * 3" children:
+        [#child sort: 0 label: "multiplicand" node:
+          [#node title: "2"]
+        ]
+        [#child sort: 1 label: "multiplier" node:
+          [#node title: "3"]
+        ]
+      ]
+    ]
+  ]
+```
+
+### Session
+```
+search
+  root = [#root]
+
+commit
+  [#session focused: root]
+```
+
+## View
+### Root container
+```
+commit @browser
+  [#span #root-container]
+```
+
+### Node
+```
+search
+  node = [#node]
+
+search @browser
+  root-container = [#root-container]
+  node-container = if existing-node-container = [#child-view node: node] then existing-node-container else root-container
+
+bind @browser
+  node-container.children +=
+    [#span #node-view node: node class: "node" sort: 3 children:
+      [#span #node-content node: node class: "content" text: node.title sort: 0]
+    ]
+```
+
+### Node children
+```
+search
+  node = [#node children]
+
+search @browser
+  node-view = [#node-view node: node]
+
+bind @browser
+  node-view.children +=
+    [#span class: "connector" sort: 1]
+  node-view.children +=
+    [#span #children-container node: node class: "children" sort: 2]
+```
+
+### Child
+```
+search
+  child = node.children
+  sort = if child.sort then child.sort else 0
+
+search @browser
+  children-container = [#children-container node]
+
+bind @browser
+  children-container.children +=
+    [#span #child-view child: child node: child.node class: "child" sort: sort children:
+      [#span class: "connector" sort: 0]
+      [#span class: "label" text: child.label sort: 1]
+      [#span class: "connector" sort: 2]
+    ]
+```
+
+### Focused subtree
+```eve
+search
+  session = [#session focused]
+
+search @browser
+  node-view = [#node-view node: focused]
+
+bind @browser
+  node-view.class += "focused-node"
+```
+
+### Focused content
+```
+search
+  session = [#session focused]
+
+search @browser
+  node-content = [#node-content node: focused]
+
+bind @browser
+  node-content.class += "focused-content"
+```
+
+### Styles
+```css
+/* CSS bug */
+{}
+```
+
+```css
+body {
+  font-family: 'Helvetica Neue';
+}
+
+.node {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+  padding: 1px;
+}
+
+.content {
+  box-shadow: 0 0 3px 1px gray;
+  border-radius: 2px;
+  padding: 0.2em;
+  background-color: white;
+}
+
+.focused-node {
+  border: 1px dotted lightblue;
+  border-radius: 4px;
+  padding: 0;
+}
+
+.focused-content {
+  box-shadow: 0 0 3px 1px blue;
+  border-radius: 2px;
+  color: blue;
+}
+
+.connector {
+  border-bottom: 1px black solid;
+  width: 10px;
+}
+
+.children {
+  display: flex;
+  flex-direction: column;
+}
+
+.child {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+}
+
+.child::before {
+  content: "";
+  position: absolute;
+  width: 1px;
+  background: black;
+}
+
+.child:only-child::before {
+  display: none;
+}
+
+.child:first-child::before {
+  top: 50%;
+  height: 50%;
+}
+
+.child::before {
+  top: 0;
+  height: 100%;
+}
+
+.child:last-child::before {
+  top: 0;
+  height: 50%;
+}
+
+.label {
+  font-size: 90%;
+}
+```
+
+## Events
+### Right: focus first child
+```
+search @event
+  [#keydown key: 39]
+
+search
+  session = [#session focused]
+  first-child = focused.children
+  first-child = [sort: 0]
+
+commit
+  session.focused := first-child.node
+```
+
+### Left: focus parent
+```
+search @event
+  [#keydown key: 37]
+
+search
+  session = [#session focused]
+  parent = [#node children: [#child node: focused]]
+
+commit
+  session.focused := parent
+```
+
+### Down: focus next sibling
+```
+search @event
+  [#keydown key: 40]
+
+search
+  session = [#session focused]
+  focused-child = [#child sort node: focused]
+  parent = [#node children: focused-child]
+  next-child = parent.children
+  next-child = [sort: sort + 1]
+
+commit
+  session.focused := next-child.node
+```
+
+### Up: focus previous sibling
+```
+search @event
+  [#keydown key: 38]
+
+search
+  session = [#session focused]
+  focused-child = [#child sort node: focused]
+  parent = [#node children: focused-child]
+  next-child = parent.children
+  next-child = [sort: sort - 1]
+
+commit
+  session.focused := next-child.node
+```
+
+### Click: focus
+```
+search @event
+  [#click element]
+
+search @browser
+  element = [#node-content node]
+
+search
+  session = [#session]
+
+commit
+  session.focused := node
+```
+
+###
