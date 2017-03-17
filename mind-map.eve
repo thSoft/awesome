@@ -3,25 +3,7 @@
 ### Mind map
 ```
 commit
-  [#node #root title: "-1 + (2 * 3)" children:
-    [#child sort: 0 label: "augend" node:
-      [#node title: "-1" children:
-        [#child sort: 0 label: "negated" node:
-          [#node title: "1"]
-        ]
-      ]
-    ]
-    [#child sort: 1 label: "addend" node:
-      [#node title: "2 * 3" children:
-        [#child sort: 0 label: "multiplicand" node:
-          [#node title: "2"]
-        ]
-        [#child sort: 1 label: "multiplier" node:
-          [#node title: "3"]
-        ]
-      ]
-    ]
-  ]
+  [#node #root title: ""]
 ```
 
 ### Session
@@ -30,10 +12,87 @@ search
   root = [#root]
 
 commit
-  [#session focused: root]
+  [#session focused: root mode: [#editing-content]]
+```
+
+### New branch
+```
+search
+  [#session mode: [#adding-branch] focused]
+  new-branch = [#branch]
+  not(new-branch.label)
+  not(new-branch.node)
+
+bind
+  new-branch.tag += "new-branch"
+```
+
+### Next branch
+```
+search
+  session = [#session mode: [#navigating] focused]
+  containing-branch = [#branch node: focused sort]
+  parent = [#node branches: containing-branch]
+  next-branch = parent.branches
+  next-branch.sort > sort
+  next-branch.sort = min[value: next-branch.sort given: next-branch]
+
+bind
+  session.next-branch := next-branch
+```
+
+### Previous branch
+```
+search
+  session = [#session mode: [#navigating] focused]
+  containing-branch = [#branch node: focused sort]
+  parent = [#node branches: containing-branch]
+  previous-branch = parent.branches
+  previous-branch.sort < sort
+  previous-branch.sort = max[value: previous-branch.sort given: previous-branch]
+
+bind
+  session.previous-branch := previous-branch
 ```
 
 ## View
+### Scripts
+```
+commit @browser
+  [#script text: "
+function handleKeyPressOnNodeContentEditor(e) {
+  if (e.keyCode == 13) e.preventDefault();
+}
+
+var MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
+var target = document.querySelector('.program');
+
+var observer = new MutationObserver(function(mutations) {
+  mutations.forEach(function(mutation) {
+    if (mutation.type === 'attributes') {
+      if (mutation.target.contentEditable == 'true') {
+        mutation.target.focus();
+      }
+    }
+    if (mutation.type === 'childList') {
+      var addedNodes = [].slice.call(mutation.addedNodes);
+      addedNodes.forEach(function(addedNode) {
+        if ((addedNode.nodeName == 'INPUT')) {
+          addedNode.focus();
+        }
+      });
+    }
+  });
+});
+
+observer.observe(target, {
+  attributes: true,
+	childList: true,
+	subtree: true
+});
+"]
+```
+
 ### Root container
 ```
 commit @browser
@@ -47,7 +106,7 @@ search
 
 search @browser
   root-container = [#root-container]
-  node-container = if existing-node-container = [#child-view node: node] then existing-node-container else root-container
+  node-container = if existing-node-container = [#branch-view node: node] then existing-node-container else root-container
 
 bind @browser
   node-container.children +=
@@ -56,10 +115,10 @@ bind @browser
     ]
 ```
 
-### Node children
+### Branch container
 ```
 search
-  node = [#node children]
+  node = [#node branches]
 
 search @browser
   node-view = [#node-view node: node]
@@ -68,26 +127,71 @@ bind @browser
   node-view.children +=
     [#span class: "connector" sort: 1]
   node-view.children +=
-    [#span #children-container node: node class: "children" sort: 2]
+    [#span #branch-container node: node class: "branch-container" sort: 2]
 ```
 
-### Child
+### Node content editor
 ```
 search
-  child = node.children
-  sort = if child.sort then child.sort else 0
+  session = [#session mode: [#editing-content] focused]
 
 search @browser
-  children-container = [#children-container node]
+  node-view = [#node-view node: focused]
+  node-content = node-view.children
+  node-content = [#node-content]
 
 bind @browser
-  children-container.children +=
-    [#span #child-view child: child node: child.node class: "child" sort: sort children:
+  node-content.class += "editing"
+  node-content.contenteditable := true
+  node-content.onkeypress := "handleKeyPressOnNodeContentEditor(event)"
+```
+
+### Branch
+```
+search
+  branch = node.branches
+
+search @browser
+  branch-container = [#branch-container node]
+
+bind @browser
+  branch-container.children +=
+    [#span #branch-view branch: branch class: "branch" sort: branch.sort children:
       [#span class: "connector" sort: 0]
-      [#span class: "label" text: child.label sort: 1]
-      [#span class: "connector" sort: 2]
     ]
 ```
+
+### Branch's label & node
+```
+search
+  branch = [#branch]
+
+search @browser
+  branch-view = [#branch-view branch: branch]
+
+bind @browser
+  branch-view.node := branch.node
+  branch-view.children +=
+    [#span class: "label" text: branch.label sort: 1]
+  branch-view.children +=
+    [#span class: "connector" sort: 2]
+
+```
+
+### Branch adder
+```
+search
+  new-branch = [#new-branch]
+
+search @browser
+  branch-view = [#branch-view branch: new-branch]
+
+bind @browser
+  branch-view.children +=
+    [#input sort: 1 size: 5]
+```
+
+TODO: input styling
 
 ### Focused subtree
 ```eve
@@ -140,6 +244,10 @@ body {
   background-color: white;
 }
 
+.editing {
+  background-color: lightyellow;
+}
+
 .focused-node {
   border: 1px dotted lightblue;
   border-radius: 4px;
@@ -157,40 +265,40 @@ body {
   width: 10px;
 }
 
-.children {
+.branch-container {
   display: flex;
   flex-direction: column;
 }
 
-.child {
+.branch {
   display: flex;
   flex-direction: row;
   align-items: center;
   position: relative;
 }
 
-.child::before {
+.branch::before {
   content: "";
   position: absolute;
   width: 1px;
   background: black;
 }
 
-.child:only-child::before {
+.branch:only-child::before {
   display: none;
 }
 
-.child:first-child::before {
+.branch:first-child::before {
   top: 50%;
   height: 50%;
 }
 
-.child::before {
+.branch::before {
   top: 0;
   height: 100%;
 }
 
-.child:last-child::before {
+.branch:last-child::before {
   top: 0;
   height: 50%;
 }
@@ -200,19 +308,45 @@ body {
 }
 ```
 
-## Events
+## Key combination
+
+```
+commit @event
+  [#key-combination]
+```
+
+```
+search @event
+  key-combination = [#key-combination]
+  [#keydown key]
+
+commit @event
+  key-combination.keys += key
+```
+
+```
+search @event
+  key-combination = [#key-combination]
+  [#keyup key]
+
+commit @event
+  key-combination.keys := none
+```
+
+## Navigating
+
 ### Right: focus first child
 ```
 search @event
   [#keydown key: 39]
 
 search
-  session = [#session focused]
-  first-child = focused.children
-  first-child = [sort: 0]
+  session = [#session focused mode: [#navigating]]
+  first-branch = focused.branches
+  first-branch = [sort: min[value: focused.branches.sort]]
 
 commit
-  session.focused := first-child.node
+  session.focused := first-branch.node
 ```
 
 ### Left: focus parent
@@ -221,8 +355,8 @@ search @event
   [#keydown key: 37]
 
 search
-  session = [#session focused]
-  parent = [#node children: [#child node: focused]]
+  session = [#session focused mode: [#navigating]]
+  parent = [#node branches: [#branch node: focused]]
 
 commit
   session.focused := parent
@@ -234,15 +368,13 @@ search @event
   [#keydown key: 40]
 
 search
-  session = [#session focused]
-  focused-child = [#child sort node: focused]
-  parent = [#node children: focused-child]
-  next-child = parent.children
-  next-child = [sort: sort + 1]
+  session = [#session mode: [#navigating] next-branch]
 
 commit
-  session.focused := next-child.node
+  session.focused := next-branch.node
 ```
+
+TODO: next node on same level
 
 ### Up: focus previous sibling
 ```
@@ -250,15 +382,13 @@ search @event
   [#keydown key: 38]
 
 search
-  session = [#session focused]
-  focused-child = [#child sort node: focused]
-  parent = [#node children: focused-child]
-  next-child = parent.children
-  next-child = [sort: sort - 1]
+  session = [#session mode: [#navigating] previous-branch]
 
 commit
-  session.focused := next-child.node
+  session.focused := previous-branch.node
 ```
+
+TODO: previous node on same level
 
 ### Click: focus
 ```
@@ -273,6 +403,187 @@ search
 
 commit
   session.focused := node
+  session.mode := [#navigating]
+```
+### Tab: start adding branch
+```
+search @event
+  [#keydown key: 9]
+
+search
+  session = [#session mode: [#navigating] focused]
+  last-branch-sort = if focused.branches then max[value: focused.branches.sort] else -1
+
+commit
+  session.mode := [#adding-branch]
+  focused.branches += [#branch sort: last-branch-sort + 1]
 ```
 
-###
+### Backspace: delete node
+```
+search @event
+  [#keydown key: 8]
+
+search
+  session = [#session mode: [#navigating] focused]
+  containing-branch = [#branch node: focused]
+  parent = [#node branches: containing-branch]
+  to-focus = if session.previous-branch then session.previous-branch.node else parent
+
+commit
+  focused := none
+  parent.branches -= containing-branch
+  containing-branch := none
+  session.focused := to-focus
+```
+
+FIXME: delete entire subtree
+
+### F2: start editing content
+```
+search @event
+  [#keydown key: 113]
+
+search
+  session = [#session mode: [#navigating] focused]
+
+commit
+  session.mode := [#editing-content]
+```
+
+### Enter: start adding sibling below
+```
+search @event
+  [#keydown key: 13]
+  not([#key-combination keys: 16])
+
+search
+  session = [#session mode: [#navigating] focused]
+  parent = [#node branches: [#branch node: focused sort]]
+  new-sort = if session.next-branch then (sort + session.next-branch.sort) / 2 else sort + 1
+
+commit
+  session.mode := [#adding-branch]
+  session.focused := parent
+  parent.branches += [#branch sort: new-sort]
+```
+
+### Shift+Enter: start adding sibling above
+```
+search @event
+  [#key-combination keys: (13, 16)]
+
+search
+  session = [#session mode: [#navigating] focused]
+  parent = [#node branches: [#branch node: focused sort]]
+  new-sort = if session.previous-branch then (session.previous-branch.sort + sort) / 2 else sort - 1
+
+commit
+  session.mode := [#adding-branch]
+  session.focused := parent
+  parent.branches += [#branch sort: new-sort]
+
+```
+
+## Adding branch
+### Enter: complete adding branch
+```
+search @event
+  event = [#keydown key: 13]
+
+search
+  session = [#session focused]
+  new-branch = [#new-branch]
+
+search @browser
+  branch-adder = [#branch-view branch: new-branch]
+  input = branch-adder.children
+  input = [#input]
+
+commit
+  new-branch.label := input.value
+  node = [#node title: "" event]
+  new-branch.node := node
+  session.mode := [#editing-content]
+  session.focused := node
+
+```
+### Esc: cancel adding branch
+```
+search @event
+  [#keydown key: 27]
+
+search
+  new-branch = [#new-branch]
+  session = [#session focused]
+
+commit
+  session.mode := [#navigating]
+  focused.branches -= new-branch
+```
+
+### Blur: cancel adding branch
+```
+search @event
+  [#blur element]
+
+search @browser
+  branch-adder = [#branch-view branch: new-branch]
+  element = branch-adder.children
+  element = [#input]
+
+search
+  session = [#session]
+  new-branch = [#new-branch]
+  parent = [branches: new-branch]
+
+commit
+  parent.branches -= new-branch
+```
+
+## Editing content
+
+### Enter: accept changes
+```
+search @event
+  [#keydown key: 13]
+
+search
+  session = [#session mode: [#editing-content] focused]
+
+search @browser
+  editor = [#node-content contenteditable: true]
+
+commit
+  focused.title := editor.text
+  session.mode := [#navigating]
+```
+
+### Esc: discard changes
+```
+search @event
+  [#keydown key: 27]
+
+search
+  session = [#session mode: [#editing-content] focused]
+
+commit
+  session.mode := [#navigating]
+```
+
+FIXME: editor is blurred -> changes are accepted instead of discarded
+### Blur: accept changes
+```
+search @event
+  [#blur element: editor]
+
+search @browser
+  editor = [#node-content contenteditable: true]
+
+search
+  session = [#session mode: [#editing-content] focused]
+
+commit
+  focused.title := editor.text
+  session.mode := [#navigating]
+```
