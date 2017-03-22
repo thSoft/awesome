@@ -1,30 +1,39 @@
 # Mind map
+
 ## Model
-### Mind map
+
+### Initial model
 ```
 commit
-  [#node #root title: ""]
-```
-
-### Session
-```
-search
-  root = [#root]
-
-commit
+  root = [#node #root title: ""]
   [#session focused: root mode: [#editing-content]]
 ```
 
-### New branch
+### Descendants
 ```
 search
-  [#session mode: [#adding-branch] focused]
-  new-branch = [#branch]
-  not(new-branch.label)
-  not(new-branch.node)
+  node = [#node]
 
 bind
-  new-branch.tag += "new-branch"
+  node.descendants += node
+```
+
+```
+search
+  node = [#node]
+  children = node.branches.node
+
+bind
+  node.descendants += children
+```
+
+```
+search
+  node = [#node]
+  descendants = node.branches.node.descendants
+
+bind
+  node.descendants += descendants
 ```
 
 ### Next branch
@@ -55,43 +64,37 @@ bind
   session.previous-branch := previous-branch
 ```
 
+### New branch
+```
+search
+  [#session mode: [#adding-branch]]
+  new-branch = [#branch not(label) not(node)]
+
+bind
+  new-branch.tag += "new-branch"
+```
+
+### Edited node
+```
+search
+  [#session mode: [#editing-content] focused]
+
+bind
+  focused.tag += "edited"
+```
+
+Hidden nodes
+```
+search
+  node = [#node]
+  path = [#node #collapsed descendants: node]
+  not(node = path)
+
+bind
+  node.tag += "hidden"
+```
+
 ## View
-### Scripts
-```
-commit @browser
-  [#script text: "
-function handleKeyPressOnNodeContentEditor(e) {
-  if (e.keyCode == 13) e.preventDefault();
-}
-
-var MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
-var target = document.querySelector('.program');
-
-var observer = new MutationObserver(function(mutations) {
-  mutations.forEach(function(mutation) {
-    if (mutation.type === 'attributes') {
-      if (mutation.target.contentEditable == 'true') {
-        mutation.target.focus();
-      }
-    }
-    if (mutation.type === 'childList') {
-      var addedNodes = [].slice.call(mutation.addedNodes);
-      addedNodes.forEach(function(addedNode) {
-        if ((addedNode.nodeName == 'INPUT')) {
-          addedNode.focus();
-        }
-      });
-    }
-  });
-});
-
-observer.observe(target, {
-  attributes: true,
-	childList: true,
-	subtree: true
-});
-"]
-```
 
 ### Root container
 ```
@@ -102,54 +105,74 @@ commit @browser
 ### Node
 ```
 search
-  node = [#node]
+  node = [#node not(#hidden)]
 
 search @browser
-  root-container = [#root-container]
-  node-container = if existing-node-container = [#branch-view node: node] then existing-node-container else root-container
+  node-container = if branch-view = [#branch-view node: node] then branch-view else [#root-container]
 
 bind @browser
   node-container.children +=
-    [#span #node-view node: node class: "node" sort: 3 children:
-      [#span #node-content node: node class: "content" text: node.title sort: 0]
-    ]
+    [#span #node-view node: node class: "node" sort: 3]
+```
+
+### Node content
+```
+search @browser
+  node-view = [#node-view node]
+
+search
+  node = [not(#edited)]
+  text = if node.title then node.title else ""
+
+bind @browser
+  node-view.children += [#span #node-content node: node class: "content" text: text sort: 0]
+```
+
+```
+search @browser
+  node-view = [#node-view node]
+
+search
+  node = [#edited]
+  text = if node.title then node.title else ""
+
+bind @browser
+  node-view.children += [#input #node-content #editor node: node class: ("content", "editing") value: text sort: 0 onfocus: "autosize(event); event.target.selectionStart = event.target.value.length;" oninput: "autosize(event);"]
 ```
 
 ### Branch container
 ```
 search
-  node = [#node branches]
+  node = [#node not(#collapsed) branches]
 
 search @browser
   node-view = [#node-view node: node]
 
 bind @browser
   node-view.children +=
-    [#span class: "connector" sort: 1]
+    [#span #collapser text: "⊖" sort: 1]
   node-view.children +=
     [#span #branch-container node: node class: "branch-container" sort: 2]
 ```
 
-### Node content editor
+### Collapsed node
 ```
 search
-  session = [#session mode: [#editing-content] focused]
+  collapsed-node = [#node #collapsed]
 
 search @browser
-  node-view = [#node-view node: focused]
-  node-content = node-view.children
-  node-content = [#node-content]
+  node-view = [#node-view node: collapsed-node]
 
 bind @browser
-  node-content.class += "editing"
-  node-content.contenteditable := true
-  node-content.onkeypress := "handleKeyPressOnNodeContentEditor(event)"
+  node-view.children +=
+    [#span #expander text: "⊕" sort: 1]
 ```
 
 ### Branch
 ```
 search
   branch = node.branches
+  not(node = [#collapsed])
 
 search @browser
   branch-container = [#branch-container node]
@@ -175,7 +198,6 @@ bind @browser
     [#span class: "label" text: branch.label sort: 1]
   branch-view.children +=
     [#span class: "connector" sort: 2]
-
 ```
 
 ### Branch adder
@@ -188,7 +210,7 @@ search @browser
 
 bind @browser
   branch-view.children +=
-    [#input sort: 1 size: 5]
+    [#input sort: 1 size: 1 oninput: "autosize(event);"]
 ```
 
 TODO: input styling
@@ -217,6 +239,37 @@ bind @browser
   node-content.class += "focused-content"
 ```
 
+### Scripts
+```
+commit @browser
+  [#script text: "
+function autosize(event) {
+  event.target.size = Math.max(event.target.value.length, 1);
+}
+
+var MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
+var target = document.querySelector('.program');
+
+var observer = new MutationObserver(function(mutations) {
+  mutations.forEach(function(mutation) {
+    if (mutation.type === 'childList') {
+      var addedNodes = [].slice.call(mutation.addedNodes);
+      addedNodes.forEach(function(addedNode) {
+        if ((addedNode.nodeName == 'INPUT')) {
+          addedNode.focus();
+        }
+      });
+    }
+  });
+});
+
+observer.observe(target, {
+	childList: true,
+	subtree: true
+});
+"]
+```
+
 ### Styles
 ```css
 /* CSS bug */
@@ -235,6 +288,7 @@ body {
   margin-top: 0.3em;
   margin-bottom: 0.3em;
   padding: 1px;
+  cursor: default;
 }
 
 .content {
@@ -246,6 +300,12 @@ body {
 
 .editing {
   background-color: lightyellow;
+  border: 0;
+  padding-right: 0;
+  font-family: inherit;
+  font-size: inherit;
+  outline: 0;
+  cursor: auto;
 }
 
 .focused-node {
@@ -416,6 +476,7 @@ search
 
 commit
   session.mode := [#adding-branch]
+  focused.tag -= "collapsed"
   focused.branches += [#branch sort: last-branch-sort + 1]
 ```
 
@@ -426,18 +487,18 @@ search @event
 
 search
   session = [#session mode: [#navigating] focused]
+  nodes-to-delete = focused.descendants
+  branches-to-delete = [#branch node: nodes-to-delete]
   containing-branch = [#branch node: focused]
   parent = [#node branches: containing-branch]
   to-focus = if session.previous-branch then session.previous-branch.node else parent
 
 commit
-  focused := none
   parent.branches -= containing-branch
-  containing-branch := none
+  nodes-to-delete := none
+  branches-to-delete := none
   session.focused := to-focus
 ```
-
-FIXME: delete entire subtree
 
 ### F2: start editing content
 ```
@@ -482,10 +543,69 @@ commit
   session.mode := [#adding-branch]
   session.focused := parent
   parent.branches += [#branch sort: new-sort]
+```
 
+### Space/click on collapser/expander: collapse/expand
+```
+search @event
+  [#keydown key: 32]
+
+search
+  [#session mode: [#navigating] focused]
+  focused.branches
+  not(focused = [#collapsed])
+
+commit
+  focused.tag += "collapsed"
+```
+
+```
+search @event
+  [#keydown key: 32]
+
+search
+  [#session mode: [#navigating] focused]
+  focused.branches
+  focused = [#collapsed]
+
+commit
+  focused.tag -= "collapsed"
+```
+
+```
+search @event
+  [#click element]
+
+search @browser
+  element = [#expander]
+  node-view = [#node-view node children: element]
+
+search
+  session = [#session]
+
+commit
+  node.tag -= "collapsed"
+  session.focused := node
+```
+
+```
+search @event
+  [#click element]
+
+search @browser
+  element = [#collapser]
+  node-view = [#node-view node children: element]
+
+search
+  session = [#session]
+
+commit
+  node.tag += "collapsed"
+  session.focused := node
 ```
 
 ## Adding branch
+
 ### Enter: complete adding branch
 ```
 search @event
@@ -506,8 +626,8 @@ commit
   new-branch.node := node
   session.mode := [#editing-content]
   session.focused := node
-
 ```
+
 ### Esc: cancel adding branch
 ```
 search @event
@@ -552,10 +672,10 @@ search
   session = [#session mode: [#editing-content] focused]
 
 search @browser
-  editor = [#node-content contenteditable: true]
+  editor = [#editor]
 
 commit
-  focused.title := editor.text
+  focused.title := editor.value
   session.mode := [#navigating]
 ```
 
@@ -571,19 +691,18 @@ commit
   session.mode := [#navigating]
 ```
 
-FIXME: editor is blurred -> changes are accepted instead of discarded
 ### Blur: accept changes
 ```
 search @event
   [#blur element: editor]
 
 search @browser
-  editor = [#node-content contenteditable: true]
+  editor = [#editor]
 
 search
   session = [#session mode: [#editing-content] focused]
 
 commit
-  focused.title := editor.text
+  focused.title := editor.value
   session.mode := [#navigating]
 ```
