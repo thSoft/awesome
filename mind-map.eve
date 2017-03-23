@@ -213,10 +213,8 @@ bind @browser
     [#input sort: 1 size: 1 oninput: "autosize(event);"]
 ```
 
-TODO: input styling
-
 ### Focused subtree
-```eve
+```
 search
   session = [#session focused]
 
