@@ -83,7 +83,7 @@ bind
   focused.tag += "edited"
 ```
 
-Hidden nodes
+### Hidden nodes
 ```
 search
   node = [#node]
@@ -463,14 +463,74 @@ commit
   session.focused := node
   session.mode := [#navigating]
 ```
-### Tab: start adding branch
+
+### Space/click on collapser/expander: collapse/expand
+```
+search @event
+  [#keydown key: 32]
+
+search
+  [#session mode: [#navigating] focused]
+  focused.branches
+  not(focused = [#collapsed])
+
+commit
+  focused.tag += "collapsed"
+```
+
+```
+search @event
+  [#keydown key: 32]
+
+search
+  [#session mode: [#navigating] focused]
+  focused.branches
+  focused = [#collapsed]
+
+commit
+  focused.tag -= "collapsed"
+```
+
+```
+search @event
+  [#click element]
+
+search @browser
+  element = [#expander]
+  node-view = [#node-view node children: element]
+
+search
+  session = [#session]
+
+commit
+  node.tag -= "collapsed"
+  session.focused := node
+```
+
+```
+search @event
+  [#click element]
+
+search @browser
+  element = [#collapser]
+  node-view = [#node-view node children: element]
+
+search
+  session = [#session]
+
+commit
+  node.tag += "collapsed"
+  session.focused := node
+```
+
+### Tab: start adding child
 ```
 search @event
   [#keydown key: 9]
 
 search
   session = [#session mode: [#navigating] focused]
-  last-branch-sort = if focused.branches then max[value: focused.branches.sort] else -1
+  last-branch-sort = if focused.branches then max[value: focused.branches.sort given: focused.branches] else -1
 
 commit
   session.mode := [#adding-branch]
@@ -541,65 +601,6 @@ commit
   session.mode := [#adding-branch]
   session.focused := parent
   parent.branches += [#branch sort: new-sort]
-```
-
-### Space/click on collapser/expander: collapse/expand
-```
-search @event
-  [#keydown key: 32]
-
-search
-  [#session mode: [#navigating] focused]
-  focused.branches
-  not(focused = [#collapsed])
-
-commit
-  focused.tag += "collapsed"
-```
-
-```
-search @event
-  [#keydown key: 32]
-
-search
-  [#session mode: [#navigating] focused]
-  focused.branches
-  focused = [#collapsed]
-
-commit
-  focused.tag -= "collapsed"
-```
-
-```
-search @event
-  [#click element]
-
-search @browser
-  element = [#expander]
-  node-view = [#node-view node children: element]
-
-search
-  session = [#session]
-
-commit
-  node.tag -= "collapsed"
-  session.focused := node
-```
-
-```
-search @event
-  [#click element]
-
-search @browser
-  element = [#collapser]
-  node-view = [#node-view node children: element]
-
-search
-  session = [#session]
-
-commit
-  node.tag += "collapsed"
-  session.focused := node
 ```
 
 ## Adding branch
